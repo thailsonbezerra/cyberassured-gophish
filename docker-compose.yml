@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cyberassured-phish-gophish
+    container_name: cyberassured-gophish
     restart: unless-stopped
     env_file:
       - .env
@@ -15,6 +15,12 @@ services:
     volumes:
       - ./data:/opt/gophish/data
       - ./db:/opt/gophish/db          # ← Essencial para as migrações
+    networks:
+      - mimesure-net
 
+networks:
+  mimesure-net:
+      external: true
+      
 volumes:
   gophish_data:
