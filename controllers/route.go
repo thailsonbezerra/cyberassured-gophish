@@ -139,6 +139,9 @@ func (as *AdminServer) registerRoutes() {
 	router.HandleFunc("/impersonate", mid.Use(as.Impersonate, mid.RequirePermission(models.PermissionModifySystem), mid.RequireLogin))
 	// SSO login endpoint - validates an HMAC token and creates a session
 	router.HandleFunc("/sso_login", as.SSOLogin)
+	// API endpoint for exchanging an upstream JWT (from Cyberassured) for a
+	// short-lived Gophish token. Protected by API key middleware.
+	router.Handle("/api/sso/exchange", mid.RequireAPIKey(http.HandlerFunc(as.SSOExchange)))
 	// Create the API routes
 	api := api.NewServer(
 		api.WithWorker(as.worker),
