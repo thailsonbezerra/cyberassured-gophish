@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt"
 	ctx "github.com/gophish/gophish/context"
 	log "github.com/gophish/gophish/logger"
 	"github.com/gophish/gophish/middleware"
@@ -76,12 +76,11 @@ func (as *AdminServer) SSOLogin(w http.ResponseWriter, r *http.Request) {
 func verifyJWTToken(tokenStr string, key []byte) (*ssoPayload, error) {
     type claims struct {
         CustomerId int64 `json:"customerInternalId"`
-        jwt.RegisteredClaims
+        jwt.StandardClaims
     }
 
-    parser := jwt.NewParser(jwt.WithValidMethods([]string{"HS256", "HS384", "HS512"}))
     var c claims
-    tok, err := parser.ParseWithClaims(tokenStr, &c, func(t *jwt.Token) (interface{}, error) {
+    tok, err := jwt.ParseWithClaims(tokenStr, &c, func(t *jwt.Token) (interface{}, error) {
         // Ensure the method is HMAC; change if you want to support RS256.
         if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
             return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
@@ -98,8 +97,8 @@ func verifyJWTToken(tokenStr string, key []byte) (*ssoPayload, error) {
     pl := &ssoPayload{
         CustomerId: c.CustomerId,
     }
-    if c.ExpiresAt != nil {
-        pl.Exp = c.ExpiresAt.Unix()
+    if c.ExpiresAt != 0 {
+        pl.Exp = c.ExpiresAt
     }
     return pl, nil
 }

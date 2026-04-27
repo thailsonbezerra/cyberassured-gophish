@@ -10,7 +10,6 @@ require (
 	github.com/emersion/go-message v0.12.0
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
-	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gophish/gomail v0.0.0-20200818021916-1f6d0dfd512e
 	github.com/gorilla/context v1.1.1
 	github.com/gorilla/csrf v1.6.2
