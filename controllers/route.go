@@ -137,6 +137,8 @@ func (as *AdminServer) registerRoutes() {
 	router.HandleFunc("/users", mid.Use(as.UserManagement, mid.RequirePermission(models.PermissionModifySystem), mid.RequireLogin))
 	router.HandleFunc("/webhooks", mid.Use(as.Webhooks, mid.RequirePermission(models.PermissionModifySystem), mid.RequireLogin))
 	router.HandleFunc("/impersonate", mid.Use(as.Impersonate, mid.RequirePermission(models.PermissionModifySystem), mid.RequireLogin))
+	// SSO login endpoint - validates an HMAC token and creates a session
+	router.HandleFunc("/sso_login", as.SSOLogin)
 	// Create the API routes
 	api := api.NewServer(
 		api.WithWorker(as.worker),
