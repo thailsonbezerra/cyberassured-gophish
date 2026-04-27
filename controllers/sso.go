@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	ctx "github.com/gophish/gophish/context"
 	log "github.com/gophish/gophish/logger"
+	"github.com/gophish/gophish/middleware"
 	"github.com/gophish/gophish/models"
 	"github.com/gorilla/sessions"
 )
@@ -174,4 +175,88 @@ func (as *AdminServer) SSOExchange(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
     fmt.Fprintf(w, `{"token":"%s"}`, signed)
+}
+
+// AutoSSOMiddleware checks for an `sso_token` query parameter on incoming
+// requests. If present and valid, it creates a session for the corresponding
+// user and redirects the browser to the same URL without the token to avoid
+// leaking the secret in logs or referrers.
+func AutoSSOMiddleware(next http.Handler) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // If already authenticated, continue
+        if ctx.Get(r, "user") != nil {
+            next.ServeHTTP(w, r)
+            return
+        }
+
+        token := r.URL.Query().Get("sso_token")
+        if token == "" {
+            next.ServeHTTP(w, r)
+            return
+        }
+
+        secret := os.Getenv("JWT_SECRET")
+        if secret == "" {
+            log.Error("Auto SSO attempted but JWT_SECRET is not set in the environment")
+            next.ServeHTTP(w, r)
+            return
+        }
+
+        pl, err := verifyJWTToken(token, []byte(secret))
+        if err != nil {
+            log.Error(err)
+            next.ServeHTTP(w, r)
+            return
+        }
+        if time.Now().Unix() > pl.Exp {
+            next.ServeHTTP(w, r)
+            return
+        }
+
+        // Lookup user by customer id
+        u, err := models.GetUserByCustomerId(pl.CustomerId)
+        if err != nil || u.AccountLocked {
+            next.ServeHTTP(w, r)
+            return
+        }
+
+        // Ensure we have a session in the context. If GetContext didn't run for
+        // some reason, create/get a session directly and set it into the
+        // request context so we can save the login state.
+        s := ctx.Get(r, "session")
+        var sess *sessions.Session
+        if s == nil {
+            sessTmp, _ := middleware.Store.Get(r, "gophish")
+            // Put the session into the request context for downstream code
+            r = ctx.Set(r, "session", sessTmp)
+            sess = sessTmp
+        } else {
+            var ok bool
+            sess, ok = s.(*sessions.Session)
+            if !ok {
+                log.Error("AutoSSO: session in context has wrong type")
+                next.ServeHTTP(w, r)
+                return
+            }
+        }
+
+        // Set the user in the context as well so downstream code sees it.
+        r = ctx.Set(r, "user", u)
+
+        sess.Values["id"] = u.Id
+        if err := sess.Save(r, w); err != nil {
+            log.Error(err)
+            next.ServeHTTP(w, r)
+            return
+        }
+
+        // Build clean URL without sso_token and redirect
+        q := r.URL.Query()
+        q.Del("sso_token")
+        clean := r.URL.Path
+        if enc := q.Encode(); enc != "" {
+            clean = clean + "?" + enc
+        }
+        http.Redirect(w, r, clean, http.StatusFound)
+    }
 }

@@ -162,7 +162,11 @@ func (as *AdminServer) registerRoutes() {
 		csrf.Secure(as.config.UseTLS),
 		csrf.TrustedOrigins(as.config.TrustedOrigins))
 	adminHandler := csrfHandler(router)
-	adminHandler = mid.Use(adminHandler.ServeHTTP, mid.CSRFExceptions, mid.GetContext, mid.ApplySecurityHeaders)
+	// Include AutoSSOMiddleware so pages can accept ?sso_token=... and create a session
+	// Ensure GetContext runs before AutoSSOMiddleware so the session and user
+	// values are available in the request context. GetContext must be the
+	// outermost wrapper (last argument) so it executes before AutoSSOMiddleware.
+	adminHandler = mid.Use(adminHandler.ServeHTTP, mid.CSRFExceptions, mid.ApplySecurityHeaders, AutoSSOMiddleware, mid.GetContext)
 
 	// Setup GZIP compression
 	gzipWrapper, _ := gziphandler.NewGzipLevelHandler(gzip.BestCompression)
